@@ -12,7 +12,7 @@ process {
         $length = [Math]::Ceiling([Math]::Sqrt($in))
         $halflength = ($length / 2) - .5
         $lrc = $length * $length
-        (0..3 | % {[pscustomobject]@{low = $lrc - $length + 1; hi = $lrc}; $llc -= ($length - 1)} |? {$_.low -lt $in -and $in -le $_.hi} | select @{n = "a"; e = {$halflength + [math]::max($halflength - ($_.hi - $in), $halflength - ($in - $_.low))}}).a
+        (0..3 | % {[pscustomobject]@{low = $lrc - $length + 1; hi = $lrc}; $lrc -= ($length - 1)} |? {$_.low -lt $in -and $in -le $_.hi} | select @{n = "a"; e = {$halflength + [math]::max($halflength - ($_.hi - $in), $halflength - ($in - $_.low))}}).a
     } else {
         $grid = @{}
 
@@ -22,8 +22,8 @@ process {
         
         $max = 1
         
-        1..10 | % { 
-            1..$_ | % {
+        while ($max -lt 10) {
+            foreach ($i in 1..$max) {
                 $x++
                 $r = $grid["$($x-1),$($y-1)"] + `
                     $grid["$($x-1),$($y)"] + `
@@ -40,7 +40,7 @@ process {
                 $grid["$x,$y"] = $r
                 #write-output "$x,$y = $r"
             }
-            1..$_ | % {
+            foreach ($i in 1..$max) {
                 $y++
                 $r = $grid["$($x-1),$($y-1)"] + `
                     $grid["$($x-1),$($y)"] + `
@@ -59,7 +59,7 @@ process {
             }
             $max++
 
-            1..$_ | % {
+            foreach ($i in 1..$max) {
                 $x--
                 $r = $grid["$($x-1),$($y-1)"] + `
                     $grid["$($x-1),$($y)"] + `
