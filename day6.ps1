@@ -11,8 +11,10 @@ begin {
 
 process {
     [int[]]$m = $in -split "`t" # fill memory banks
+    $x = 1
+
     $s = @{
-        $in = 1
+        $in = $x
     }
 $s
     $m
@@ -27,17 +29,20 @@ $done = $false
             $m[($maxindex + $i) % $m.count]++
         }
         if ($s.ContainsKey($m -join "`t")) {
+            $x - $s[$m -join "`t"]
             #    $m
             $done = $true
         } 
-        $s[$m -join "`t"] = 1
+        $s[$m -join "`t"] = $x
         #$s
+        $x++
         1
     } 
     
     
        # $m
         $c
+        $s.Values | measure -max
 }
 
 end { 
