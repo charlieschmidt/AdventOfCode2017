@@ -4,8 +4,8 @@ to run any day:
 
 first part:
 
-gc input_file.txt | ./dayX.ps 
+gc input_file.txt | ./dayX.ps1 
 
 second part
 
-gc input_file.txt | ./dayX.ps 2
+gc input_file.txt | ./dayX.ps1 2
