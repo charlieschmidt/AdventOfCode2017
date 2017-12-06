@@ -6,43 +6,41 @@ param (
 )
 
 begin {
-    $c = 0
 }
 
 process {
     [int[]]$m = $in -split "`t" # fill memory banks
-    $x = 1
+    $x = 1 # step counter
+    $s = @{} # seen configurations
+    $s[$m -join ""] = $x # set seen initial
+    
+    & { while ($true) { # start inifinite pipeline
+        $m | measure -max | select -expand maximum # get the max value
+    } } | % { 
+        $i = $m.IndexOf([int]$_) # get the index of that value
+        $m[$i] = 0 # set to zero
 
-    $s = @{
-        $in = $x
-    }
-$s
-    $m
-$done = $false
-    & { while ($done -eq $false) { $true } } | % { 
-        $c++
-        [int]$maxvalue = $m | measure -max | select -expand maximum
-        $maxindex = $m.IndexOf($maxvalue)
-        # write-host "index: $maxindex $maxvalue"
-        $m[$maxindex] = 0
-        for ($i = 1; $i -le $maxvalue; $i++) {
-            $m[($maxindex + $i) % $m.count]++
+        1..$_ | % { # increment the next $_ (wrapping around)
+            $m[($i + $_) % $m.count]++
         }
-        if ($s.ContainsKey($m -join "`t")) {
-            $x - $s[$m -join "`t"]
-            #    $m
-            $done = $true
-        } 
-        $s[$m -join "`t"] = $x
-        #$s
-        $x++
-        1
-    } 
-    
-    
-       # $m
-        $c
-        $s.Values | measure -max
+
+        $m -join "" # put the new configuration out on the pipeline
+    } | % {
+        if ($s.ContainsKey($_)) {
+            # if we've seen it before
+            if ($Part -eq 1) { 
+                $s.values.count # part one wants to know how many cycles to get from start to here
+            } else { 
+                $x - $s[$_] # part two wants to know how many cycles in from repeat to repeat
+                # $x is current position, $s values are the 'when i saw it' positions
+            }
+        } else {
+            $s[$_] = $x++ # if we havnt seen it, put it in the list with its "when i saw it"
+        }
+        
+        #only things that come out of this block in the pipeline are $s.values.count or $x-$s[$_] above
+        
+    } | select -first 1 # select the first thing out of the pipe here to end the inifinite pipe. 
 }
 
 end { 
