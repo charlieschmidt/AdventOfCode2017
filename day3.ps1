@@ -11,13 +11,13 @@ begin {
 process {
     if ($part -eq 1) {
         $length = [Math]::Ceiling([Math]::Sqrt($in)) # get a potential max side length (using the lower right corner as odd squares)
-        $halflength = ($length / 2) - .5 # get the half length (potential max distance away from center cell)
+        $halflength = [Math]::Floor($length / 2)  # get the half length (potential max distance away from center cell)
         $lrc = $length * $length # get the lower right corner
         (0..3 | % { # for all 4 sides
                 [pscustomobject]@{low = $lrc - $length + 1; hi = $lrc}; $lrc -= ($length - 1) # make an object that has the bounds for that side
             } |? { # where
                 $_.low -lt $in -and $in -le $_.hi # the number we are looking for is between the bounds - now we know which side our value is on
-            } | select @{n = "a"; e = {$halflength + [math]::max($halflength - ($_.hi - $in), $halflength - ($in - $_.low))}} # select an answer
+           } | select @{n = "a"; e = {$halflength + [math]::max($halflength - ($_.hi - $in), $halflength - ($in - $_.low))}} # select an answer
             <#
             the answer is the original halflength (out to this layer in the sides) 
             plus the offset from the corner (which is another halflength away, minus how far *our* number is towards that corner
