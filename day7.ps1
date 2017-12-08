@@ -6,20 +6,21 @@ param (
 )
 
 begin {
-    # collect input into a list
-    $script:nodelist = @()
+    # collect input into a hash
+    $script:nodes = new-object system.collections.hashtable
 }
 
 process {
     # collect input
-    $script:nodelist += $in |? {
+    $o = $in |? {
         $in -match '^(?<Name>[a-z]+) \((?<Weight>\d+)\)(?: -> ){0,1}(?<ChildNodeNamesString>(?:(?:[a-z]+)(?:, ){0,1})+)*$'
     } | % { 
-        [pscustomobject]$matches # not fast, but easy and pipeable
-    } | select Name, Weight, ChildNodeNamesString | add-member -MemberType ScriptProperty -name ChildNodeNames -value {        
-        $this.ChildNodeNamesString -split ", "
-    } -passthru 
-    # node is a name/weight/childnodes
+        [pscustomobject]$matches | select Name, Weight, ChildNodeNamesString | add-member -MemberType ScriptProperty -name ChildNodeNames -value {        
+            $this.ChildNodeNamesString -split ", "
+        } -passthru 
+    }
+
+    $script:nodes[$o.name] = $o
 }
 
 end {  
@@ -29,10 +30,6 @@ end {
         [array]::reverse($arr)
         $arr
     }
-
-    # faster lookup later, work with a hashtable from now on
-    $script:nodes = new-object system.collections.hashtable
-    $script:nodelist |% {$script:nodes[$_.Name] = $_}
 
     $root = $script:nodes.GetEnumerator() |? { # find the node that isnt a child of any other
         $_.Key -notin ($script:nodes.Values.ChildNodeNames)
@@ -61,9 +58,8 @@ end {
             ($_.ChildNodes.subweight | select -unique).count -gt 1 # find the object that has too many unique subweights [they should all be the same]
         } | select -first 1 |% { # select the first (farthest into the graph) we find
             $g = $_.ChildNodes | group subweight | sort-object count # find the two different subweights, first element is the broken one
-            $brokennode = $g[0].group[0]
-            $offby = $brokennode.subweight - $g[1].group[0].Subweight # how many is it offby, 2nd element in the group is the good subweight
-            $brokennode.weight - $offby # output the offby
+            # it should be its weight minus the difference in the subweights
+            $g[0].group[0].weight - ($g[0].group[0].subweight - $g[1].group[0].Subweight)
         }
     } 
 }
