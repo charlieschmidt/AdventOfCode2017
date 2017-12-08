@@ -54,11 +54,11 @@ end {
         } | % { 
             # reverse the output from the ordering above - now the first elements in the pipeline are the leaves of the graph and the last element is the root
             # thanks /u/ka-splam for suggestion
-            $global:rev = @() 
+            $script:rev = @() 
         } { 
-            $global:rev = @($_) + $global:rev 
+            $script:rev = @($_) + $script:rev 
         } { 
-            $global:rev 
+            $script:rev 
         } | %{ 
             # we can add subweight here at the same time we reference it on childnodes because we've ordered the list so that children always come before their parents
             $_ | add-member -notepropertyname Subweight -notepropertyvalue ([int]$_.weight + [int]($_.ChildNodes.Subweight | Measure -sum | select -expand Sum)) -passthru  #calculate the subweight and pass the object on
