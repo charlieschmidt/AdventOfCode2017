@@ -42,6 +42,8 @@ end {
             $s2 = '$script:registers["{0}"] = $script:registers["{0}"] {1} {2}' -f $_.Register, $operations[$_.Operation], $_.Value
             [ScriptBlock]::Create($s2).Invoke()
         }
-    } 
+        $script:registers.values | measure -max | select -expand Maximum    
+    } | measure -max | select -expand maximum
+    
     $script:registers.values | measure -max | select -expand Maximum
 }
