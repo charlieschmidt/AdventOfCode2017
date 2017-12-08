@@ -6,63 +6,64 @@ param (
 )
 
 begin {
-    $script:nodes = @()
+    # collect input into a list
+    $script:nodelist = @()
 }
 
 process {
-    $script:nodes += $in |? {
-        $in -match '^(?<Name>[a-z]+) \((?<Weight>\d+)\)(?: -> ){0,1}(?<ChildNodeNames>(?:(?:[a-z]+)(?:, ){0,1})+)*$'
+    # collect input
+    $script:nodelist += $in |? {
+        $in -match '^(?<Name>[a-z]+) \((?<Weight>\d+)\)(?: -> ){0,1}(?<ChildNodeNamesString>(?:(?:[a-z]+)(?:, ){0,1})+)*$'
     } | % { 
-        [pscustomobject]$matches
-    } | select Name, Weight, ChildNodeNames | add-member -MemberType ScriptProperty -name ChildNodeNamesSplit -value {        
-        $this.ChildNodeNames -split ", "
+        [pscustomobject]$matches # not fast, but easy and pipeable
+    } | select Name, Weight, ChildNodeNamesString | add-member -MemberType ScriptProperty -name ChildNodeNames -value {        
+        $this.ChildNodeNamesString -split ", "
     } -passthru 
+    # node is a name/weight/childnodes
 }
 
-end { 
-    write-verbose "Finding root node"
-    $root = $script:nodes |? {
-        $_.Name -notin ($script:nodes.ChildNodeNamesSplit)
-    } | select -first 1
+end {  
+    #sorta cheating the single pipeline, but i need to reverse stuff in a pipeline :)
+    function reverse { 
+        $arr = @($input)
+        [array]::reverse($arr)
+        $arr
+    }
+
+    # faster lookup later, work with a hashtable from now on
+    $script:nodes = new-object system.collections.hashtable
+    $script:nodelist |% {$script:nodes[$_.Name] = $_}
+
+    $root = $script:nodes.GetEnumerator() |? { # find the node that isnt a child of any other
+        $_.Key -notin ($script:nodes.Values.ChildNodeNames)
+    } | select -first 1 -expand value # only 1, help the pipeline end early and expand the object
     
-    write-verbose "$root"
     if ($part -eq 1) {
         $root.Name
     } else {
+        # need to put the list of nodes in a workable order, so that we can iterate through and calcuate subweight
         $queue = new-object system.collections.queue
-        $queue.Enqueue($root)
-        $ordered = @()
-        write-verbose "Ordering nodes"
-        $i = 0
-        while ($queue.Count -ne 0) {
-            $ele = $queue.Dequeue()
-            
-            $ele | add-member -MemberType NoteProperty -name ChildNodes -value ($ele.ChildNodeNamesSplit | % {$cn = $_; $script:nodes |? {$_.Name -eq $cn}})
-            write-verbose "ordered $($ele.name) $i"
-            $i++
-            $ordered += $ele
-            $ele.ChildNodes | ? {$_} | % { $queue.Enqueue($_) }
-        } 
-        
-        write-verbose "Reversing"
-        [array]::Reverse($ordered)
-        $i = 0
-        write-verbose "Calculating subweights"
-        $ordered | % { 
-            $v = [int]$_.weight + [int]($_.ChildNodes.Subweight | Measure -sum | select -expand Sum)
-            $_ | add-member -notepropertyname Subweight -notepropertyvalue $v
 
-            write-verbose "subweight $($_.name) $($_.subweight)  $i"
-            $i++
-        }
-        write-verbose "Finding unbalanced nodes"
-        $script:nodes |? {
-            ($_.ChildNodes.subweight | select -unique).count -gt 1
-        } | select -first 1 | % {
-            $g = $_.ChildNodes | group subweight | sort-object count
+        # this is a modification of a breadth-first algorithm, where we'll load a queue with the root
+        $queue.Enqueue($root)
+        
+        & { while ($queue.Count -ne 0) { # start inifinite pipeline, iterate til the queue is empty
+            $queue.Dequeue() # pop the first element
+        } } | % { 
+            # find all the actual child node objects, add that as a property to the element and PASS IT THROUGH THE PIPELINE
+            # this puts it out on the pipeline in the order we want
+            $_ | add-member -MemberType NoteProperty -name ChildNodes -value ($_.ChildNodeNames | % {$script:nodes[$_]}) -passthru
+            # add the childnodes to the queue
+            $_.ChildNodes | ? {$_} | % { $queue.Enqueue($_) }
+        } | Reverse | %{ # reverse the output from the ordering above - now the first elements in the pipeline are the leafs of the graph
+            $_ | add-member -notepropertyname Subweight -notepropertyvalue ([int]$_.weight + [int]($_.ChildNodes.Subweight | Measure -sum | select -expand Sum)) -passthru  #calculate the subweight and pass the object on
+        } |? {
+            ($_.ChildNodes.subweight | select -unique).count -gt 1 # find the object that has too many unique subweights [they should all be the same]
+        } | select -first 1 |% { # select the first (farthest into the graph) we find
+            $g = $_.ChildNodes | group subweight | sort-object count # find the two different subweights, first element is the broken one
             $brokennode = $g[0].group[0]
-            $offby = $brokennode.subweight - $g[1].group[0].Subweight
-            $brokennode.weight - $offby
+            $offby = $brokennode.subweight - $g[1].group[0].Subweight # how many is it offby, 2nd element in the group is the good subweight
+            $brokennode.weight - $offby # output the offby
         }
     } 
 }
