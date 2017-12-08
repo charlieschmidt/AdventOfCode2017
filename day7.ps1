@@ -11,74 +11,58 @@ begin {
 
 process {
     $script:nodes += $in |? {
-        $in -match '^(?<Name>[a-z]+) \((?<Weight>\d+)\)(?: -> ){0,1}(?<ChildNodes>(?:(?:[a-z]+)(?:, ){0,1})+)*$'
+        $in -match '^(?<Name>[a-z]+) \((?<Weight>\d+)\)(?: -> ){0,1}(?<ChildNodeNames>(?:(?:[a-z]+)(?:, ){0,1})+)*$'
     } | % { 
         [pscustomobject]$matches
-    } | select Name, Weight, ChildNodes | add-member -MemberType ScriptProperty -name ChildNodeNames -value {        
-        $this.ChildNodes -split ", "
-    } -passthru | add-member -MemberType ScriptProperty -name Children -value {
-        $this.ChildNodeNames | % {$cn = $_; $script:nodes |? {$_.Name -eq $cn}}
-    } -passthru | add-member -MemberType ScriptProperty -name Parent -value {
-        $script:nodes |? {$_.ChildNodeNames -contains $this.Name}
-    } -PassThru -Force | add-member  -MemberType ScriptProperty -name Subweight -value {
-        if ($null -eq $this.Children) {
-            [int]$this.Weight
-        } elseif ($null -ne $this.SubweightValue) {
-            [int]$this.SubweightValue
-        } else {
-            [int]$this.Weight + [int]($this.Children | % {$_.Subweight} | measure -sum | select -expand sum)
-        }
-        #
-    } -PassThru -Force
-    
+    } | select Name, Weight, ChildNodeNames | add-member -MemberType ScriptProperty -name ChildNodeNamesSplit -value {        
+        $this.ChildNodeNames -split ", "
+    } -passthru 
 }
 
 end { 
-    #need bfs probably, or convert array to graph and graph logic, ugh?
+    write-verbose "Finding root node"
+    $root = $script:nodes |? {
+        $_.Name -notin ($script:nodes.ChildNodeNamesSplit)
+    } | select -first 1
+    
+    write-verbose "$root"
     if ($part -eq 1) {
-        $script:nodes |? {
-            $_.Name -notin ($script:nodes.ChildNodeNames)
-        } | select -expand Name
+        $root.Name
     } else {
-        $script:nodes| add-member -MemberType ScriptProperty -name Depth -value {
-            if ($null -eq $this.Parent) {
-                0
-            } else {
-                1 + [int]$this.Parent.Depth
-            }
-        } -passthru
-        <*
-        write-host 'here'
-        $script:nodes |? { 
-            $null -ne $_.ChildNodes
-        } | % {
-            $_ | Add-Member -NotePropertyName "SubweightValue" -NotePropertyValue ($_.Subweight) -PassThru
-        }| % {
-            write-verbose ("{0} has {1} nodes and {2} sw" -f $_.name, $_.childnodenames.count, $_.subweightvalue)
-            $_
-        } | ? {
-            write-verbose ("{0} has {1} nodes and {2} sw {3}" -f $_.name, $_.childnodenames.count, $_.subweightvalue, (($_.Children.SubweightValue | select -unique) -join ','))
-            #$_
-            ($_.Children.SubweightValue | select -unique | measure | select -expand count) -ne 1
-        } |% {
-            $_
-        } #|% { $_ }#>
-            <#| % {
-            $g = $_.children | group subweight | sort count
-            $g
-            $brokennode = $g[0].group[0]
-            $brokennode
-            $offby = $brokennode.subweight - $g[1].group[0].Subweight
-            $offby
-            $brokennode.weight - $offby
-        }#>
-
-            <#
-        $nodes | select *, @{n = "Subweight"; e = {
-                $me = $_
-                $_.Weight + ($me.children | % {$cn = $_; $nodes |? {$_.node -eq $cn} | select -expand subweight | measure -sum | select -expand sum})
-            }
-        }#>
+        $queue = new-object system.collections.queue
+        $queue.Enqueue($root)
+        $ordered = @()
+        write-verbose "Ordering nodes"
+        $i = 0
+        while ($queue.Count -ne 0) {
+            $ele = $queue.Dequeue()
+            
+            $ele | add-member -MemberType NoteProperty -name ChildNodes -value ($ele.ChildNodeNamesSplit | % {$cn = $_; $script:nodes |? {$_.Name -eq $cn}})
+            write-verbose "ordered $($ele.name) $i"
+            $i++
+            $ordered += $ele
+            $ele.ChildNodes | ? {$_} | % { $queue.Enqueue($_) }
+        } 
         
+        write-verbose "Reversing"
+        [array]::Reverse($ordered)
+        $i = 0
+        write-verbose "Calculating subweights"
+        $ordered | % { 
+            $v = [int]$_.weight + [int]($_.ChildNodes.Subweight | Measure -sum | select -expand Sum)
+            $_ | add-member -notepropertyname Subweight -notepropertyvalue $v
+
+            write-verbose "subweight $($_.name) $($_.subweight)  $i"
+            $i++
         }
+        write-verbose "Finding unbalanced nodes"
+        $script:nodes |? {
+            ($_.ChildNodes.subweight | select -unique).count -gt 1
+        } | select -first 1 | % {
+            $g = $_.ChildNodes | group subweight | sort-object count
+            $brokennode = $g[0].group[0]
+            $offby = $brokennode.subweight - $g[1].group[0].Subweight
+            $brokennode.weight - $offby
+        }
+    } 
 }
