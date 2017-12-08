@@ -24,13 +24,6 @@ process {
 }
 
 end {  
-    #sorta cheating the single pipeline, but i need to reverse stuff in a pipeline :)
-    function reverse { 
-        $arr = @($input)
-        [array]::reverse($arr)
-        $arr
-    }
-
     $root = $script:nodes.GetEnumerator() |? { # find the node that isnt a child of any other
         $_.Key -notin ($script:nodes.Values.ChildNodeNames)
     } | select -first 1 -expand value # only 1, help the pipeline end early and expand the object
@@ -58,7 +51,15 @@ end {
             $_ | add-member -MemberType NoteProperty -name ChildNodes -value ($_.ChildNodeNames | % {$script:nodes[$_]}) -passthru
             # add the childnodes to the queue
             $_.ChildNodes | ? {$_} | % { $queue.Enqueue($_) }
-        } | Reverse | %{ # reverse the output from the ordering above - now the first elements in the pipeline are the leafs of the graph
+        } | % { 
+            # reverse the output from the ordering above - now the first elements in the pipeline are the leaves of the graph and the last element is the root
+            # thanks /u/ka-splam for suggestion
+                $global:rev = @() 
+        } { 
+                $global:rev = @($_) + $rev 
+        } { 
+                $global:rev 
+        } | %{ 
             # we can add subweight here at the same time we reference it on childnodes because we've ordered the list so that children always come before their parents
             $_ | add-member -notepropertyname Subweight -notepropertyvalue ([int]$_.weight + [int]($_.ChildNodes.Subweight | Measure -sum | select -expand Sum)) -passthru  #calculate the subweight and pass the object on
         } |? {
