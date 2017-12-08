@@ -56,7 +56,7 @@ end {
             # thanks /u/ka-splam for suggestion
             $global:rev = @() 
         } { 
-            $global:rev = @($_) + $rev 
+            $global:rev = @($_) + $global:rev 
         } { 
             $global:rev 
         } | %{ 
