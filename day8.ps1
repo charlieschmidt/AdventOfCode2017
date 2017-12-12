@@ -27,7 +27,7 @@ begin {
 process {
     # collect input
     $script:maxes += $in |? {
-        $in -match '^(?<Register>[a-z]+) (?<Operation>(?:dec|inc)) (?<Value>(?:-|[0-9])+) if (?<ConditionRegister>[a-z]+) (?<Condition>[!<>=]+) (?<ConditionValue>(?:-|[0-9])+)$'
+        $_ -match '^(?<Register>[a-z]+) (?<Operation>(?:dec|inc)) (?<Value>(?:-|[0-9])+) if (?<ConditionRegister>[a-z]+) (?<Condition>[!<>=]+) (?<ConditionValue>(?:-|[0-9])+)$'
     } | % { 
         [pscustomobject]$matches | select Register, Operation, Value, ConditionRegister, Condition, ConditionValue
     } |% {# now have a pretty object on the pipeline representing a single instruction, foreach of these...

@@ -13,7 +13,7 @@ begin {
 process {
     # collect input
     $o = $in |? {
-        $in -match '^(?<Name>[a-z]+) \((?<Weight>\d+)\)(?: -> ){0,1}(?<ChildNodeNamesString>(?:(?:[a-z]+)(?:, ){0,1})+)*$'
+        $_ -match '^(?<Name>[a-z]+) \((?<Weight>\d+)\)(?: -> ){0,1}(?<ChildNodeNamesString>(?:(?:[a-z]+)(?:, ){0,1})+)*$'
     } | % { 
         [pscustomobject]$matches | select Name, Weight, ChildNodeNamesString | add-member -MemberType ScriptProperty -name ChildNodeNames -value {        
             $this.ChildNodeNamesString -split ", "
