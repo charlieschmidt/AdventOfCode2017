@@ -8,12 +8,12 @@
 
 #### infinite pipeline generator: (day 3 and day 5)
 
-    & { while ($true) { $true } } | 
+    & { while (<condition>) { <output-element> } } | 
 
 either pipe to select to get your way out of it, or change the condition to something that will evaluate.  the elements coming out can be dynamic too
 
 #### array cross product (day 2)
-    $array |% {$a = $_; $array |% {$_,$x}} 
+    $array |% {$a = $_; $array |% {$_, $x}} 
 
 #### array operator
 
@@ -23,7 +23,7 @@ will send a single value to the pipeline - an array of the elements
 
 #### in-pipeline reverse array elements
 
-    | % { 
+    |% { 
         $script:rev = @() 
     } { 
         $script:rev = @($_) + $script:rev 
@@ -35,7 +35,7 @@ will send a single value to the pipeline - an array of the elements
 
     $in |? {
         $_ -match '^(?<Name>[0-9]+) <-> (?<ChildNodeNamesString>(?:(?:[0-9]+)(?:, ){0,1})+)*$'
-    } | % { 
+    } |% { 
         [pscustomobject]$matches | select Name, ChildNodeNamesString
     } | 
 
