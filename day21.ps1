@@ -1,0 +1,139 @@
+param (
+    [Parameter(ValueFromPipeline = $true)]
+    [string]$in,
+    [Parameter(Position = 1)]
+    [int]$part = 1
+)
+
+begin {
+    #hash table to store rules, from->to
+    $script:rules = @{}
+}
+
+process {
+    # parse the line into an object
+    # we'll parse the To side into just an array of rows
+    # parse the From side into an array of arrays of cells
+    [pscustomobject] @{
+        From = ($in -split ' => ')[0] -split '/' | % { , ($_ -split '' |? {$_})}
+        To   = ($in -split ' => ')[1] -split '/'
+    } | % {
+        $r = $_
+        
+        1..4 | % { # rotate
+            #rotate = transpose + flip
+
+            #transpose on diagonal
+            for ($y = 0; $y -lt $r.From.Length; $y++) {
+                for ($x = $y; $x -lt $r.From.Length; $x++) { 
+                    # for y 0..l
+                    # for x y..l
+                    # ^ gives us the diagonal
+
+                    if ($y -ne $x) {
+                        # dont bother rotating when its equal
+                        #swap cells
+                        $c = $r.From[$x][$y]
+                        $r.From[$x][$y] = $r.From[$y][$x] 
+                        $r.From[$y][$x] = $c
+                    }
+                }
+            }
+
+            #flip each row
+            for ($y = 0; $y -lt $r.From.Length; $y++) {
+                [Array]::Reverse($r.From[$y])
+            }
+            
+            # output the rule
+            $r | select From, To
+
+            #and note, $r persists, so we'll rotate this same one again next time
+        }
+    } | % {
+        # foreach rule so far, also generate the mirror
+        
+        $from = $_.From | % { #flip each row
+            $x = $_
+            $x = $x[$x.length..0]
+            , $x
+        }
+
+        # select the two rules - the original, and the mirror
+        # combine From back into a single string for easier hashing/matching
+        # To remains an array of rows
+        $_ | select @{n = "From"; e = {($_.From | % {$_ -join ''}) -join '/'}}, To 
+        $_ | select @{n = "From"; e = {($From | % {$_ -join ''}) -join '/'}}, To 
+    } | % {
+        $script:rules[$_.From] = $_.To
+    }
+    
+    
+}
+
+end { 
+    #initial grid
+    $grid = @(
+        ".#."
+        "..#"
+        "###")
+
+   
+
+    if ($part -eq 1) {
+        $iter = 5
+    } else {
+        $iter = 18
+    }
+
+    1..$iter | % {
+
+        # how to split the grid, rules say check 2 first, otherwise do 3
+        if ($grid.Count % 2 -eq 0) {
+            $d = 2
+        } else {
+            $d = 3
+        }
+    
+        # number of subgrids in a single dimension
+        $m = $grid.Count / $d
+
+        $newgrid = @()
+
+        
+        for ($y = $0; $y -lt $m; $y++) { # foreach row of subgrids
+            
+            $row = ((, "") * ($d + 1)) # make an array of empty strings (and note, 2x2 -> 3x3, 3x3->4x4)
+
+            for ($x = $0; $x -lt $m; $x++) {
+                #foreach column in that row
+                # hahahahahahahahahahahahahahahaha
+                # so, first time through on a say a 9x9, we need subgrid here to be the first 3x3 (from the top left)
+                # to do that, we'll select the first 3 rows of grid, and for each of those rows select the first 3 columns (and join back into a string)
+                # second time through, we need the top-middle grid.  x has incremented, so we'll select that subgrid this time
+                $subgrid = ($grid[($y * $d)..($y * $d + ($d - 1))] | % {$_[($x * $d)..($x * $d + ($d - 1))] -join ''}) -join '/'
+                
+                # look up the new grid value.  $subgrid goes from being a string to being an array of rows
+                $subgrid = $script:rules[$subgrid]
+                
+                #for each subgrid row, append it to the existing row in this row of subgrids
+                0..$d | % {
+                    $row[$_] += $subgrid[$_]
+                }
+            }
+
+            #append the finished rows
+            $newgrid += $row
+        }
+
+        # set to new grid
+        $grid = $newgrid
+
+        # put existing grid out on the pipeline (as array)
+        , $grid
+    } | select -last 1 | % { # pick the last grid on the pipeline
+        # count the number of # characters
+        $_ | % { $_ -split '' |? {$_ -eq '#'} | measure | select -expand count} | measure -sum | select -expand sum
+    }
+    
+}
