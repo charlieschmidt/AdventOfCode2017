@@ -39,4 +39,36 @@ will send a single value to the pipeline - an array of the elements
         [pscustomobject]$matches | select Name, ChildNodeNamesString
     } | 
 
+#### generate array of empty strings
+
+    $array_with_x_items = (, "") * $x
+
+#### wait for pipeline values to stop changing
+
+    $script:StopAfterXSame = 15 # if we've seen this many elements in a row that are the same, stop the pipeline
+
+    {
+        ... | write-output # some output that may change initially but steady eventually
+    } | % -Begin { 
+        # wait for the values coming in on the pipeline here to 'not change' for a certain number of steps
+
+        # create a queue at the start of this pipeline
+        $script:rolling = new-object system.collections.queue 
+
+    } -Process { # foreach element into the pipeline
+
+        #add it to the queue
+        $script:rolling.Enqueue($_)
+
+        if ($script:rolling.Count -eq ($script:StopAfterXSame + 1)) {
+            # the most recent answers
+            [void]$script:rolling.Dequeue() # remove one, so we'll compare the last $X
+
+            if (($script:rolling | select -Unique | measure).count -eq 1) {
+                # see how many distinct answers there are, if 1 - then we've "settled" on the solution, otherwise keep processing
+                $_ | write-output
+            }
+        }
+    } | select -first 1 # select the first thing out of the foreach/rolling thing above
+
 ###### *I am allowing that the ./dayX.ps1 scripts are function scripts that take pipeline input - this allows for a nicer begin/process/end structure when needed and gives me the sort-of-flexibility of two pipelines, but all the algorithm work will (hopefully) be done in one
