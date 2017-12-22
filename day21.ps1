@@ -27,19 +27,19 @@ process {
             0..($r.From.Length - 1) | % {
                 $y = $_
 
-                $y..($r.From.Length - 1) | % { # cant do ($y+1).. cause of powershells reverse enumerator thingies lol
+                $y..($r.From.Length - 1) |? {# cant do ($y+1).. cause of powershells reverse enumerator thingies lol
+                    # dont bother rotating when its equal
+                    $_ -ne $y #remove it here
+                } | % { 
                     $x = $_
                     # for y 0..l
-                    # for x y..l
+                    # for x y+1..l
                     # ^ gives us the diagonal
 
-                    if ($y -ne $_) {
-                        # dont bother rotating when its equal
-                        #swap cells
-                        $c = $r.From[$_][$y]
-                        $r.From[$_][$y] = $r.From[$y][$_] 
-                        $r.From[$y][$_] = $c
-                    }
+                    #swap cells
+                    $c = $r.From[$_][$y]
+                    $r.From[$_][$y] = $r.From[$y][$_] 
+                    $r.From[$y][$_] = $c
                 }
             }
 
@@ -49,15 +49,14 @@ process {
             }
             
             # output the rule
-            $r | select From, To
+            $r | select From, To # this is a new object on the pipeline, not $r
 
             #and note, $r persists, so we'll rotate this same one again next time
         }
     } | % {
         # foreach rule so far, also generate the mirror
-        
-        $from = $_.From | % { #reverse each row
-            , $_[$_.length..0]
+        $from = $_.From | % { 
+            , $_[$_.length..0] #reverse each row
         }
 
         # select the two rules - the original, and the mirror
@@ -68,8 +67,6 @@ process {
     } | % {
         $script:rules[$_.From] = $_.To
     }
-    
-    
 }
 
 end { 
@@ -79,7 +76,6 @@ end {
         "..#"
         "###")
 
-   
 
     if ($part -eq 1) {
         $iter = 5
@@ -88,7 +84,6 @@ end {
     }
 
     1..$iter | % {
-
         # how to split the grid, rules say check 2 first, otherwise do 3
         if ($grid.Count % 2 -eq 0) {
             $d = 2
@@ -101,7 +96,6 @@ end {
 
         $newgrid = @()
 
-        
         0..($m - 1) | % { # foreach row of subgrids
             $y = $_
             
@@ -138,5 +132,4 @@ end {
         # count the number of # characters
         $_ | % { $_ -split '' |? {$_ -eq '#'} | measure | select -expand count} | measure -sum | select -expand sum
     }
-    
 }
