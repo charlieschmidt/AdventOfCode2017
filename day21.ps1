@@ -24,25 +24,28 @@ process {
             #rotate = transpose + flip
 
             #transpose on diagonal
-            for ($y = 0; $y -lt $r.From.Length; $y++) {
-                for ($x = $y; $x -lt $r.From.Length; $x++) { 
+            0..($r.From.Length - 1) | % {
+                $y = $_
+
+                $y..($r.From.Length - 1) | % { # cant do ($y+1).. cause of powershells reverse enumerator thingies lol
+                    $x = $_
                     # for y 0..l
                     # for x y..l
                     # ^ gives us the diagonal
 
-                    if ($y -ne $x) {
+                    if ($y -ne $_) {
                         # dont bother rotating when its equal
                         #swap cells
-                        $c = $r.From[$x][$y]
-                        $r.From[$x][$y] = $r.From[$y][$x] 
-                        $r.From[$y][$x] = $c
+                        $c = $r.From[$_][$y]
+                        $r.From[$_][$y] = $r.From[$y][$_] 
+                        $r.From[$y][$_] = $c
                     }
                 }
             }
 
             #flip each row
-            for ($y = 0; $y -lt $r.From.Length; $y++) {
-                [Array]::Reverse($r.From[$y])
+            0..($r.From.Length - 1) |% {
+                [Array]::Reverse($r.From[$_])
             }
             
             # output the rule
@@ -53,10 +56,8 @@ process {
     } | % {
         # foreach rule so far, also generate the mirror
         
-        $from = $_.From | % { #flip each row
-            $x = $_
-            $x = $x[$x.length..0]
-            , $x
+        $from = $_.From | % { #reverse each row
+            , $_[$_.length..0]
         }
 
         # select the two rules - the original, and the mirror
@@ -101,12 +102,14 @@ end {
         $newgrid = @()
 
         
-        for ($y = $0; $y -lt $m; $y++) { # foreach row of subgrids
+        0..($m - 1) | % { # foreach row of subgrids
+            $y = $_
             
             $row = ((, "") * ($d + 1)) # make an array of empty strings (and note, 2x2 -> 3x3, 3x3->4x4)
 
-            for ($x = $0; $x -lt $m; $x++) {
-                #foreach column in that row
+            0..($m - 1) | % { #foreach column in that row
+                $x = $_
+                
                 # hahahahahahahahahahahahahahahaha
                 # so, first time through on a say a 9x9, we need subgrid here to be the first 3x3 (from the top left)
                 # to do that, we'll select the first 3 rows of grid, and for each of those rows select the first 3 columns (and join back into a string)
